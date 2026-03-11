@@ -221,7 +221,7 @@ Connection lost
      ▼
 ┌─────────────────────────────────┐
 │  Exponential Backoff            │
-│  delay = 5s × 2^n (max 5 min)  │
+│  delay = 5s × 2^n (max 5 min)   │
 ├─────────────────────────────────┤
 │  Every 5 failures:              │
 │  → GCM re-checkin               │
