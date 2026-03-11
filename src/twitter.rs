@@ -31,7 +31,7 @@ async fn register_push_subscription(
 
     let body = json!({
         "push_device_info": {
-            "env": 3,
+            "env": 2,
             "os_version": DEVICE_ID,
             "udid": DEVICE_ID,
             "protocol_version": 3,
