@@ -32,7 +32,7 @@ Aether emulates a Chrome browser's Web Push client, connecting directly to Googl
 
 <img width="2790" height="1520" alt="Flow" src="https://github.com/user-attachments/assets/13a7ade6-fd2b-4f31-ad6d-8f95d9b63a7b" />
 
-<img https://i.imgur.com/CqBqUhQ.jpeg />
+![Flow](https://i.imgur.com/CqBqUhQ.jpeg)
 
 ---
 
