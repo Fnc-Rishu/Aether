@@ -1,0 +1,73 @@
+// Copyright 2014 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+//
+// Request and reply to the "checkin server" devices poll every few hours.
+
+syntax = "proto2";
+
+option optimize_for = LITE_RUNTIME;
+
+package checkin_proto;
+
+import "android_checkin.proto";
+
+// A concrete name/value pair sent to the device's Gservices database.
+message GservicesSetting {
+  required bytes name = 1;
+  required bytes value = 2;
+}
+
+// Devices send this every few hours to tell us how they're doing.
+message AndroidCheckinRequest {
+  optional string imei = 1;
+  optional string meid = 10;
+  repeated string mac_addr = 9;
+  repeated string mac_addr_type = 19;
+  optional string serial_number = 16;
+  optional string esn = 17;
+
+  optional int64 id = 2;
+  optional int64 logging_id = 7;
+  optional string digest = 3;
+  optional string locale = 6;
+  required AndroidCheckinProto checkin = 4;
+
+  optional string desired_build = 5;
+  optional string market_checkin = 8;
+  repeated string account_cookie = 11;
+  optional string time_zone = 12;
+
+  // Security token used to validate the checkin request.
+  optional fixed64 security_token = 13;
+
+  // Version of checkin protocol.
+  optional int32 version = 14;
+
+  // OTA certs accepted by device (base-64 SHA-1 of cert files).
+  repeated string ota_cert = 15;
+
+  optional int32 fragment = 20;
+
+  optional string user_name = 21;
+
+  optional int32 user_serial_number = 22;
+}
+
+// The response to the device.
+message AndroidCheckinResponse {
+  required bool stats_ok = 1;
+  optional int64 time_msec = 3;
+
+  optional string digest = 4;
+  optional bool settings_diff = 9;
+  repeated string delete_setting = 10;
+  repeated GservicesSetting setting = 5;
+
+  optional bool market_ok = 6;
+
+  optional fixed64 android_id = 7;
+  optional fixed64 security_token = 8;
+
+  optional string version_info = 11;
+}

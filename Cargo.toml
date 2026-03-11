@@ -1,0 +1,38 @@
+[package]
+name = "aether"
+version = "0.1.0"
+edition = "2021"
+description = "Twitter/X push notification receiver via FCM (Firebase Cloud Messaging)"
+license = "MIT"
+
+[[bin]]
+name = "aether"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-rustls = "0.26"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+clap = { version = "4", features = ["derive"] }
+base64 = "0.22"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "6"
+uuid = { version = "1", features = ["v4"] }
+p256 = { version = "0.13", features = ["ecdh"] }
+rand = "0.8"
+ece = "2.3"
+console = "0.15"
+dialoguer = "0.11"
+indicatif = "0.17"
+prost = "0.13"
+bytes = "1"
+webpki-roots = "0.26"
+rustls = "0.23"
+
+[build-dependencies]
+prost-build = "0.13"
