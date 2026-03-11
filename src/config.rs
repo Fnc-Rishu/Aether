@@ -29,7 +29,6 @@ pub struct GcmSession {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Registration {
-    /// The FCM push endpoint URL: https://fcm.googleapis.com/fcm/send/<gcm_token>
     pub endpoint: String,
     pub gcm: GcmSession,
     pub keys: WebPushKeys,
@@ -55,7 +54,6 @@ impl Config {
     }
 }
 
-/// Reads the webhook endpoint URL from the WEBHOOK_ENDPOINT environment variable.
 pub fn get_webhook_endpoint() -> Result<String> {
     std::env::var("WEBHOOK_ENDPOINT").map_err(|_| {
         AetherError::Config("WEBHOOK_ENDPOINT environment variable is not set".to_string())
