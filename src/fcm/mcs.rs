@@ -73,7 +73,11 @@ pub async fn connect(
         roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
     };
 
-    let tls_config = rustls::ClientConfig::builder()
+    let tls_config = rustls::ClientConfig::builder_with_provider(
+            rustls::crypto::ring::default_provider().into()
+        )
+        .with_safe_default_protocol_versions()
+        .unwrap()
         .with_root_certificates(root_store)
         .with_no_client_auth();
 
