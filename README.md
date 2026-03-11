@@ -30,6 +30,8 @@ Aether emulates a Chrome browser's Web Push client, connecting directly to Googl
 
 ### 📋 Step by Step
 
+Aether's lifecycle is split into two phases: a one-time **registration** that wires everything up, and a long-running **listener** that keeps the TLS socket open and forwards notifications as they arrive.
+
 ![Flow](https://i.imgur.com/NXvFg2c.jpeg)
 
 ---
