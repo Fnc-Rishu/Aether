@@ -19,6 +19,12 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
+    // Explicitly install the ring crypto provider for rustls.
+    // Required since rustls 0.23+ when multiple providers are available.
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     let cli = Cli::parse();
 
     let filter = if cli.verbose {
@@ -258,7 +264,6 @@ async fn cmd_unregister(config_path: &PathBuf) -> Result<()> {
         error::AetherError::Config("No registration found.".to_string())
     })?;
 
-    // GCM/FCM registrations expire on their own; we simply clear local state.
     config.registration = None;
     config.save(config_path)?;
 
