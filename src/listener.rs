@@ -5,17 +5,12 @@ use reqwest::Client;
 use std::path::Path;
 use std::time::Duration;
 
-/// Outcome of a single listen session.
-enum SessionOutcome {
-    /// Connection closed normally.
+enum SessionOutcome {    
     NormalClose,
-    /// Error after a successful login (connection was established).
     DisconnectedAfterConnect(AetherError),
-    /// Failed before login completed.
     ConnectionFailed(AetherError),
 }
 
-/// Computes exponential backoff: 5s × 2^n, capped at 5 minutes.
 fn calc_backoff(retry_count: u32) -> u64 {
     const BASE_SECS: u64 = 5;
     const MAX_SECS: u64 = 5 * 60;
@@ -25,7 +20,6 @@ fn calc_backoff(retry_count: u32) -> u64 {
     )
 }
 
-/// Main listen loop with automatic reconnection.
 pub async fn listen(mut registration: Registration, config_path: &Path) -> Result<()> {
     let mut retry_count: u32 = 0;
     let mut persistent_ids: Vec<String> = Vec::new();
@@ -46,7 +40,6 @@ pub async fn listen(mut registration: Registration, config_path: &Path) -> Resul
                 retry_count += 1;
                 let delay = calc_backoff(retry_count);
 
-                // On repeated failures, re-checkin to refresh security token
                 if retry_count % 5 == 0 {
                     tracing::warn!("multiple failures, re-checking in to GCM");
                     match refresh_session(&mut registration, config_path).await {
@@ -71,7 +64,6 @@ pub async fn listen(mut registration: Registration, config_path: &Path) -> Resul
     }
 }
 
-/// Refreshes the GCM session (re-checkin) and persists it.
 async fn refresh_session(registration: &mut Registration, config_path: &Path) -> Result<()> {
     let http = reqwest::Client::new();
     let new_session = checkin::checkin_existing(&http, &registration.gcm).await?;
@@ -83,7 +75,6 @@ async fn refresh_session(registration: &mut Registration, config_path: &Path) ->
     Ok(())
 }
 
-/// Runs a single listen session.
 async fn listen_once(
     registration: &Registration,
     persistent_ids: &[String],
@@ -101,7 +92,6 @@ async fn listen_once(
     }
 }
 
-/// Receives and processes notifications until the connection drops.
 async fn run_notification_loop(
     client: &mut mcs::McsClient,
     keys: &config::WebPushKeys,
@@ -149,12 +139,11 @@ fn decrypt_notification(
     notification: &mcs::FcmNotification,
     keys: &config::WebPushKeys,
 ) -> Result<Vec<u8>> {
-    use base64::engine::general_purpose::URL_SAFE;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
 
     let key_pair = ece::EcKeyComponents::new(keys.private_key.clone(), keys.public_key.clone());
 
-    // Check if we have aesgcm-style headers (crypto-key + encryption in app_data)
     if let (Some(ref crypto_key_header), Some(ref encryption_header)) =
         (&notification.crypto_key, &notification.encryption)
     {
@@ -165,10 +154,10 @@ fn decrypt_notification(
             AetherError::Decryption("missing 'salt' param in encryption".to_string())
         })?;
 
-        let sender_public_key = URL_SAFE.decode(&dh_value).map_err(|e| {
+        let sender_public_key = URL_SAFE_NO_PAD.decode(dh_value.trim_end_matches('=')).map_err(|e| {
             AetherError::Decryption(format!("base64 decode sender key: {}", e))
         })?;
-        let salt = URL_SAFE.decode(&salt_value).map_err(|e| {
+        let salt = URL_SAFE_NO_PAD.decode(salt_value.trim_end_matches('=')).map_err(|e| {
             AetherError::Decryption(format!("base64 decode salt: {}", e))
         })?;
 
@@ -187,7 +176,6 @@ fn decrypt_notification(
         return Ok(decrypted);
     }
 
-    // Fallback: try aes128gcm (the data itself contains the header)
     let decrypted = ece::decrypt(&key_pair, &keys.auth_secret, &notification.data)
         .map_err(|e| AetherError::Decryption(format!("aes128gcm decrypt: {}", e)))?;
 
@@ -198,9 +186,6 @@ fn decrypt_notification(
     Ok(decrypted)
 }
 
-/// Extracts a named parameter from a semicolon/comma-delimited header value.
-///
-/// Handles formats like `dh=abc123` and `dh=abc123;p256ecdsa=xyz`.
 fn extract_param(header: &str, param: &str) -> Option<String> {
     for part in header.split(|c| c == ';' || c == ',') {
         let part = part.trim();
@@ -211,7 +196,6 @@ fn extract_param(header: &str, param: &str) -> Option<String> {
     None
 }
 
-/// Sends the decrypted notification payload to the configured webhook endpoint via HTTP POST.
 async fn send_to_webhook(payload: &serde_json::Value) -> Result<()> {
     let webhook_url = config::get_webhook_endpoint()?;
     let client = Client::new();
