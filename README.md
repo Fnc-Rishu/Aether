@@ -30,43 +30,7 @@ Aether emulates a Chrome browser's Web Push client, connecting directly to Googl
 
 ### 📋 Step by Step
 
-```
-  ┌─────────────────────────────────────────────────────────────────┐
-  │                     REGISTRATION FLOW                           │
-  ├─────────────────────────────────────────────────────────────────┤
-  │                                                                 │
-  │  1️⃣  GCM Check-in ──▶ android.clients.google.com               │
-  │     └─ Obtain android_id + security_token (protobuf)           │
-  │                                                                 │
-  │  2️⃣  GCM Register ──▶ android.clients.google.com/c2dm/register3│
-  │     └─ Get FCM push endpoint URL                               │
-  │                                                                 │
-  │  3️⃣  Generate ECDH P-256 key pair + auth secret                │
-  │     └─ For end-to-end encryption (RFC 8291)                    │
-  │                                                                 │
-  │  4️⃣  Register with Twitter ──▶ x.com/i/api/1.1/notifications   │
-  │     └─ Send endpoint + encryption keys                         │
-  │                                                                 │
-  └─────────────────────────────────────────────────────────────────┘
-
-  ┌─────────────────────────────────────────────────────────────────┐
-  │                      LISTENING FLOW                             │
-  ├─────────────────────────────────────────────────────────────────┤
-  │                                                                 │
-  │  5️⃣  Open TLS connection ──▶ mtalk.google.com:5228              │
-  │     └─ MCS binary protocol (protobuf over raw TLS)             │
-  │                                                                 │
-  │  6️⃣  Receive DataMessageStanza                                  │
-  │     └─ Encrypted notification payload                          │
-  │                                                                 │
-  │  7️⃣  Decrypt with ECE (aes128gcm / aesgcm)                     │
-  │     └─ Using private key + auth secret                         │
-  │                                                                 │
-  │  8️⃣  Forward JSON ──▶ POST to your webhook                     │
-  │     └─ Clean, decrypted notification payload                   │
-  │                                                                 │
-  └─────────────────────────────────────────────────────────────────┘
-```
+<img width="2816" height="1536" alt="Flow" src="https://github.com/user-attachments/assets/5bea51ee-eec9-4583-b6d3-25f36816b872" />
 
 ---
 
