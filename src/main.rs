@@ -19,8 +19,6 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
-    // Explicitly install the ring crypto provider for rustls.
-    // Required since rustls 0.23+ when multiple providers are available.
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
@@ -134,10 +132,12 @@ async fn cmd_register(config_path: &PathBuf) -> Result<()> {
 
     let mut config = Config::load(config_path)?;
 
+    let existing_gcm = config.registration.clone().map(|r| r.gcm);
+
     let subscription = spin(
-        "Registering with GCM/FCM...",
+        "Registering with GCM/FCM (minting new token)...",
         "GCM/FCM registered",
-        push::subscribe(),
+        push::subscribe(existing_gcm),
     )
     .await?;
 
