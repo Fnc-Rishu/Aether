@@ -7,7 +7,7 @@ use serde_json::json;
 
 const TWITTER_API_BASE: &str = "https://x.com/i/api/1.1";
 const AUTHORIZATION_BEARER: &str = "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
-const DEVICE_ID: &str = "Mac/Chrome";
+const DEVICE_ID: &str = "Windows/Chrome";
 
 pub async fn register(
     twitter_config: &TwitterConfig,
@@ -31,11 +31,10 @@ async fn register_push_subscription(
 
     let body = json!({
         "push_device_info": {
+            "env": 3,
             "os_version": DEVICE_ID,
             "udid": DEVICE_ID,
-            "env": 3,
-            "locale": "en",
-            "protocol_version": 1,
+            "protocol_version": 3,
             "token": token,
             "encryption_key1": encryption_key1,
             "encryption_key2": encryption_key2
