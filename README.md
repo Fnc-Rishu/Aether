@@ -27,14 +27,7 @@
 Aether emulates a Chrome browser's Web Push client, connecting directly to Google's MCS (Mobile Connection Server) over a persistent TLS socket. When Twitter fires a push notification, it arrives instantly as a protobuf-encoded message — no polling, no scraping, no delays.
 
 ```
-┌──────────┐         ┌──────────────────┐         ┌──────────┐         ┌──────────┐
-│          │  push   │                  │  TLS /   │          │  HTTP   │          │
-│ Twitter  │────────▶│   Google FCM     │◀─protobuf│  Aether  │──POST──▶│ Webhook  │
-│    /X    │         │  (MCS Server)    │──────────│          │         │          │
-│          │         │                  │          │          │         │          │
-└──────────┘         └──────────────────┘         └──────────┘         └──────────┘
-                     mtalk.google.com:5228         decrypt &             your app
-                                                   forward
+<img width="2771" height="710" alt="Flowchart" src="https://github.com/user-attachments/assets/a3b92b8c-b9d5-4a89-9fd7-4bedda5e7546" />
 ```
 
 ### 📋 Step by Step
