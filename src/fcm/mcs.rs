@@ -1,16 +1,3 @@
-//! MCS (Mobile Connection Server) client.
-//!
-//! Implements the binary protobuf-framed protocol used by Chrome/Android to
-//! maintain a persistent TLS connection to `mtalk.google.com:5228` for
-//! receiving FCM push notifications in real time.
-//!
-//! Protocol:
-//! 1. Client opens TLS connection to mtalk.google.com:5228
-//! 2. Client sends MCS version byte (41)
-//! 3. Client sends LoginRequest (tag=2)
-//! 4. Server responds with LoginResponse (tag=3)
-//! 5. Bidirectional heartbeat ping/ack and data messages
-
 use crate::config::GcmSession;
 use crate::error::{AetherError, Result};
 use bytes::{Buf, BytesMut};
@@ -23,7 +10,6 @@ use tokio::time::Instant;
 use tokio_rustls::client::TlsStream;
 use tokio_rustls::TlsConnector;
 
-/// Protobuf types generated from mcs.proto at build time.
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/mcs_proto.rs"));
 }
@@ -31,8 +17,6 @@ pub mod proto {
 const MCS_HOST: &str = "mtalk.google.com";
 const MCS_PORT: u16 = 5228;
 const MCS_VERSION: u8 = 41;
-
-/// MCS message tags (from Chromium source).
 const TAG_HEARTBEAT_PING: u8 = 0;
 const TAG_HEARTBEAT_ACK: u8 = 1;
 const TAG_LOGIN_REQUEST: u8 = 2;
@@ -40,14 +24,9 @@ const TAG_LOGIN_RESPONSE: u8 = 3;
 const TAG_CLOSE: u8 = 4;
 const TAG_IQ_STANZA: u8 = 7;
 const TAG_DATA_MESSAGE_STANZA: u8 = 8;
-
-/// Heartbeat interval in seconds. Chrome uses ~4 minutes.
 const HEARTBEAT_INTERVAL_SECS: u64 = 4 * 60;
-
-/// Heartbeat ack timeout in seconds.
 const HEARTBEAT_TIMEOUT_SECS: u64 = 30;
 
-/// A decoded push notification from FCM.
 #[derive(Debug, Clone)]
 pub struct FcmNotification {
     pub persistent_id: Option<String>,
@@ -55,16 +34,11 @@ pub struct FcmNotification {
     pub crypto_key: Option<String>,
     pub encryption: Option<String>,
 }
-
-/// Active MCS connection.
 pub struct McsClient {
     stream: TlsStream<TcpStream>,
     buf: BytesMut,
-    /// persistent_ids received in this session, sent on reconnect
     received_persistent_ids: Vec<String>,
 }
-
-/// Connects to MCS and performs the login handshake.
 pub async fn connect(
     session: &GcmSession,
     received_persistent_ids: Vec<String>,
@@ -99,12 +73,10 @@ pub async fn connect(
         .map_err(|e| AetherError::Mcs(format!("TLS handshake failed: {}", e)))?;
 
     tracing::debug!("TLS connection established to {}", addr);
-
-    // Send MCS version byte + LoginRequest
     let android_id_str = session.android_id.to_string();
     let login_request = proto::LoginRequest {
         adaptive_heartbeat: Some(false),
-        auth_service: Some(2), // ANDROID_ID
+        auth_service: Some(2),
         auth_token: session.security_token.to_string(),
         id: "chrome-63.0.3234.0".into(),
         domain: "mcs.android.com".into(),
@@ -123,7 +95,6 @@ pub async fn connect(
 
     let login_bytes = login_request.encode_to_vec();
 
-    // MCS framing: version byte, then tag byte, then varint-encoded length, then payload
     let mut frame = Vec::with_capacity(2 + 10 + login_bytes.len());
     frame.push(MCS_VERSION);
     frame.push(TAG_LOGIN_REQUEST);
@@ -137,14 +108,12 @@ pub async fn connect(
 
     tracing::debug!("LoginRequest sent");
 
-    // Read LoginResponse
     let mut client = McsClient {
         stream,
         buf: BytesMut::with_capacity(4096),
         received_persistent_ids,
     };
 
-    // The first response byte from the server is the MCS version
     let mut version_buf = [0u8; 1];
     client
         .stream
@@ -154,7 +123,6 @@ pub async fn connect(
 
     tracing::debug!(server_mcs_version = version_buf[0], "MCS version received");
 
-    // Read the login response message
     let (tag, data) = client.read_message().await?;
     if tag != TAG_LOGIN_RESPONSE {
         return Err(AetherError::Mcs(format!(
@@ -183,9 +151,6 @@ pub async fn connect(
 }
 
 impl McsClient {
-    /// Waits for the next push notification, handling heartbeats automatically.
-    ///
-    /// Returns `None` if the connection was closed by the server.
     pub async fn next_notification(&mut self) -> Result<Option<FcmNotification>> {
         let mut next_heartbeat = Instant::now() + Duration::from_secs(HEARTBEAT_INTERVAL_SECS);
 
@@ -233,12 +198,9 @@ impl McsClient {
                 Ok(Err(e)) => {
                     return Err(e);
                 }
-                // Heartbeat timer expired
                 Err(_) => {
                     tracing::debug!("sending HeartbeatPing");
                     self.send_heartbeat_ping().await?;
-
-                    // Wait for HeartbeatAck with timeout
                     match tokio::time::timeout(
                         Duration::from_secs(HEARTBEAT_TIMEOUT_SECS),
                         self.read_message(),
@@ -285,7 +247,6 @@ impl McsClient {
         }
     }
 
-    /// Returns the list of persistent_ids received in this session.
     #[allow(dead_code)]
     pub fn received_persistent_ids(&self) -> &[String] {
         &self.received_persistent_ids
@@ -354,10 +315,8 @@ impl McsClient {
 
         Ok(())
     }
-
-    /// Reads a single MCS message: tag byte + varint length + payload.
+    
     async fn read_message(&mut self) -> Result<(u8, bytes::Bytes)> {
-        // Ensure we have at least the tag byte
         while self.buf.is_empty() {
             self.fill_buf().await?;
         }
@@ -365,10 +324,7 @@ impl McsClient {
         let tag = self.buf[0];
         self.buf.advance(1);
 
-        // Read varint-encoded length
         let length = self.read_varint().await?;
-
-        // Read the full payload
         while self.buf.len() < length {
             self.fill_buf().await?;
         }
@@ -377,8 +333,7 @@ impl McsClient {
 
         Ok((tag, data))
     }
-
-    /// Reads a protobuf varint from the buffer, filling as needed.
+    
     async fn read_varint(&mut self) -> Result<usize> {
         let mut result: usize = 0;
         let mut shift: u32 = 0;
@@ -421,7 +376,6 @@ impl McsClient {
     }
 }
 
-/// Encodes a u64 as a protobuf varint and appends it to `out`.
 fn encode_varint(mut value: u64, out: &mut Vec<u8>) {
     loop {
         if value < 0x80 {
