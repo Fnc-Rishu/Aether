@@ -40,6 +40,8 @@ pub enum AetherError {
 
     #[error("protobuf decode error: {0}")]
     ProtobufDecode(#[from] prost::DecodeError),
-}
 
+    #[error("database error: {0}")]
+    Database(#[from] rusqlite::Error),
+}
 pub type Result<T> = std::result::Result<T, AetherError>;
