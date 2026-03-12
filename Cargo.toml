@@ -33,6 +33,7 @@ prost = "0.13"
 bytes = "1"
 webpki-roots = "0.26"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [build-dependencies]
 prost-build = "0.13"
