@@ -5,12 +5,11 @@ use reqwest::Client;
 use std::path::Path;
 use std::time::Duration;
 
-enum SessionOutcome {    
+enum SessionOutcome {
     NormalClose,
     DisconnectedAfterConnect(AetherError),
     ConnectionFailed(AetherError),
 }
-
 fn calc_backoff(retry_count: u32) -> u64 {
     const BASE_SECS: u64 = 5;
     const MAX_SECS: u64 = 5 * 60;
@@ -19,13 +18,15 @@ fn calc_backoff(retry_count: u32) -> u64 {
         MAX_SECS,
     )
 }
-
 pub async fn listen(mut registration: Registration, config_path: &Path) -> Result<()> {
     let mut retry_count: u32 = 0;
-    let mut persistent_ids: Vec<String> = Vec::new();
+    let mut persistent_ids = crate::db::load_persistent_ids(config_path).unwrap_or_else(|e| {
+        tracing::warn!(error = %e, "Failed to load persistent_ids from DB, starting fresh");
+        Vec::new()
+    });
 
     loop {
-        match listen_once(&registration, &persistent_ids).await {
+        match listen_once(&registration, &mut persistent_ids, config_path).await {
             SessionOutcome::NormalClose => {
                 retry_count = 0;
                 tracing::info!("MCS connection closed, reconnecting");
@@ -39,7 +40,6 @@ pub async fn listen(mut registration: Registration, config_path: &Path) -> Resul
             SessionOutcome::ConnectionFailed(e) => {
                 retry_count += 1;
                 let delay = calc_backoff(retry_count);
-
                 if retry_count % 5 == 0 {
                     tracing::warn!("multiple failures, re-checking in to GCM");
                     match refresh_session(&mut registration, config_path).await {
@@ -63,7 +63,6 @@ pub async fn listen(mut registration: Registration, config_path: &Path) -> Resul
         }
     }
 }
-
 async fn refresh_session(registration: &mut Registration, config_path: &Path) -> Result<()> {
     let http = reqwest::Client::new();
     let new_session = checkin::checkin_existing(&http, &registration.gcm).await?;
@@ -74,10 +73,10 @@ async fn refresh_session(registration: &mut Registration, config_path: &Path) ->
     full_config.save(config_path)?;
     Ok(())
 }
-
 async fn listen_once(
     registration: &Registration,
-    persistent_ids: &[String],
+    persistent_ids: &mut Vec<String>,
+    config_path: &Path,
 ) -> SessionOutcome {
     let mut client = match mcs::connect(&registration.gcm, persistent_ids.to_vec()).await {
         Ok(client) => client,
@@ -86,15 +85,16 @@ async fn listen_once(
 
     tracing::info!("MCS connection established, listening for notifications");
 
-    match run_notification_loop(&mut client, &registration.keys).await {
+    match run_notification_loop(&mut client, &registration.keys, persistent_ids, config_path).await {
         Ok(()) => SessionOutcome::NormalClose,
         Err(e) => SessionOutcome::DisconnectedAfterConnect(e),
     }
 }
-
 async fn run_notification_loop(
     client: &mut mcs::McsClient,
     keys: &config::WebPushKeys,
+    persistent_ids: &mut Vec<String>,
+    config_path: &Path,
 ) -> Result<()> {
     while let Some(notification) = client.next_notification().await? {
         tracing::info!(
@@ -102,7 +102,16 @@ async fn run_notification_loop(
             encrypted_size = notification.data.len(),
             "notification received"
         );
-
+        if let Some(ref pid) = notification.persistent_id {
+            if let Err(e) = crate::db::save_persistent_id(config_path, pid) {
+                tracing::warn!(error = %e, "failed to save persistent_id to DB");
+            } else {
+                persistent_ids.push(pid.clone());
+                if persistent_ids.len() > 100 {
+                    persistent_ids.remove(0);
+                }
+            }
+        }
         match handle_notification(&notification, keys).await {
             Ok(()) => {
                 tracing::info!("notification processed successfully");
@@ -112,38 +121,30 @@ async fn run_notification_loop(
             }
         }
     }
-
     Ok(())
 }
-
 async fn handle_notification(
     notification: &mcs::FcmNotification,
     keys: &config::WebPushKeys,
 ) -> Result<()> {
     let decrypted = decrypt_notification(notification, keys)?;
-
     let text = String::from_utf8(decrypted)
         .map_err(|e| AetherError::Decryption(format!("UTF-8 conversion failed: {}", e)))?;
-
     let payload: serde_json::Value =
         serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({ "raw": text }));
-
     tracing::info!(payload = %payload, "notification decrypted");
 
     send_to_webhook(&payload).await?;
 
     Ok(())
 }
-
 fn decrypt_notification(
     notification: &mcs::FcmNotification,
     keys: &config::WebPushKeys,
 ) -> Result<Vec<u8>> {
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
-
     let key_pair = ece::EcKeyComponents::new(keys.private_key.clone(), keys.public_key.clone());
-
     if let (Some(ref crypto_key_header), Some(ref encryption_header)) =
         (&notification.crypto_key, &notification.encryption)
     {
@@ -153,14 +154,12 @@ fn decrypt_notification(
         let salt_value = extract_param(encryption_header, "salt").ok_or_else(|| {
             AetherError::Decryption("missing 'salt' param in encryption".to_string())
         })?;
-
         let sender_public_key = URL_SAFE_NO_PAD.decode(dh_value.trim_end_matches('=')).map_err(|e| {
             AetherError::Decryption(format!("base64 decode sender key: {}", e))
         })?;
         let salt = URL_SAFE_NO_PAD.decode(salt_value.trim_end_matches('=')).map_err(|e| {
             AetherError::Decryption(format!("base64 decode salt: {}", e))
         })?;
-
         let block = ece::legacy::AesGcmEncryptedBlock::new(
             &sender_public_key,
             &salt,
@@ -168,24 +167,20 @@ fn decrypt_notification(
             notification.data.clone(),
         )
         .map_err(|e| AetherError::Decryption(format!("AesGcmEncryptedBlock: {}", e)))?;
-
         let decrypted = ece::legacy::decrypt_aesgcm(&key_pair, &keys.auth_secret, &block)
             .map_err(|e| AetherError::Decryption(format!("aesgcm decrypt: {}", e)))?;
 
         tracing::debug!(decrypted_len = decrypted.len(), "aesgcm decryption succeeded");
         return Ok(decrypted);
     }
-
     let decrypted = ece::decrypt(&key_pair, &keys.auth_secret, &notification.data)
         .map_err(|e| AetherError::Decryption(format!("aes128gcm decrypt: {}", e)))?;
-
     tracing::debug!(
         decrypted_len = decrypted.len(),
         "aes128gcm decryption succeeded"
     );
     Ok(decrypted)
 }
-
 fn extract_param(header: &str, param: &str) -> Option<String> {
     for part in header.split(|c| c == ';' || c == ',') {
         let part = part.trim();
@@ -195,15 +190,11 @@ fn extract_param(header: &str, param: &str) -> Option<String> {
     }
     None
 }
-
 async fn send_to_webhook(payload: &serde_json::Value) -> Result<()> {
     let webhook_url = config::get_webhook_endpoint()?;
     let client = Client::new();
-
     tracing::info!(url = %webhook_url, "sending to webhook");
-
     let response = client.post(&webhook_url).json(payload).send().await?;
-
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response
@@ -214,6 +205,5 @@ async fn send_to_webhook(payload: &serde_json::Value) -> Result<()> {
     } else {
         tracing::info!(status = %response.status(), "webhook request succeeded");
     }
-
     Ok(())
 }
