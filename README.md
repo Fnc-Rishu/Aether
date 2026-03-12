@@ -10,7 +10,7 @@
 
 <br/>
 
-*Stream push notifications from Twitter/X in real time — the same way Chrome does.*
+*Stream push notifications from Twitter/X in real time.*
 
 <br/>
 
@@ -24,7 +24,7 @@
 
 ## 🌊 How It Works
 
-Aether emulates a Chrome browser's Web Push client, connecting directly to Google's MCS (Mobile Connection Server) over a persistent TLS socket. When Twitter fires a push notification, it arrives instantly as a protobuf-encoded message — no polling, no scraping, no delays.
+Aether emulates a Chrome browser's Web Push client, connecting directly to Google's MCS (Mobile Connection Server) over a persistent TLS socket. When Twitter fires a push notification, it arrives instantly as a protobuf-encoded message no polling, no scraping, no delays.
 
 ![Bridge](https://i.imgur.com/rN8hw7B.png)
 
@@ -42,10 +42,10 @@ Aether's lifecycle is split into two phases: a one-time **registration** that wi
 |:--------|:------------|
 | ⚡ **Real-time** | Sub-second notification delivery via persistent MCS connection |
 | 🔒 **Encrypted** | End-to-end encryption with ECDH P-256 + ECE (RFC 8291) |
-| 📡 **Zero Polling** | No API calls while listening — pure push notifications |
+| 📡 **Zero Polling** | No API calls while listening, pure push notifications |
 | 🔄 **Auto Reconnect** | Exponential backoff with automatic GCM re-checkin |
 | 💓 **Heartbeat** | 4-minute ping/ack cycle keeps the connection alive |
-| 🦀 **Pure Rust** | Fast, safe, single binary — no runtime dependencies |
+| 🦀 **Pure Rust** | Fast, safe, single binary and no runtime dependencies |
 | 🔑 **Minimal API** | Twitter API only called once during registration |
 | 🚫 **No Scraping** | Standard W3C Push API flow, same as Chrome |
 
@@ -246,16 +246,16 @@ Connection lost
 
 ## 🔐 Security Notes
 
-- **No scraping** — Uses the standard W3C Push API flow, identical to how Chrome handles push notifications
-- **Minimal API surface** — Twitter's API is only contacted once during `register`. Zero API calls during `listen`
-- **End-to-end encryption** — Notifications are encrypted using ECDH P-256 key agreement and ECE (Encrypted Content-Encoding)
-- **Local keys** — Your private key never leaves your machine. Only the public key is shared with Twitter
+- **No scraping** → Uses the standard W3C Push API flow, identical to how Chrome handles push notifications
+- **Minimal API surface** → Twitter's API is only contacted once during `register`. Zero API calls during `listen`
+- **End-to-end encryption** → Notifications are encrypted using ECDH P-256 key agreement and ECE (Encrypted Content-Encoding)
+- **Local keys** → Your private key never leaves your machine. Only the public key is shared with Twitter
 
 ---
 
 ## 📄 License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT → see [LICENSE](LICENSE) for details.
 
 ---
 
