@@ -44,7 +44,7 @@ Aether's lifecycle is split into two phases: a one-time **registration** that wi
 | 🔒 **Encrypted** | End-to-end encryption with ECDH P-256 + ECE (RFC 8291) |
 | 📡 **Zero Polling** | No API calls while listening, pure push notifications |
 | 🔄 **Auto Reconnect** | Exponential backoff with automatic GCM re-checkin |
-| 💓 **Heartbeat** | 4-minute ping/ack cycle keeps the connection alive |
+| 💓 **Heartbeat** | 4 mins ping/ack cycle keeps the connection alive |
 | 🦀 **Pure Rust** | Fast, safe, single binary and no runtime dependencies |
 | 🔑 **Minimal API** | Twitter API only called once during registration |
 | 🚫 **No Scraping** | Standard W3C Push API flow, same as Chrome |
