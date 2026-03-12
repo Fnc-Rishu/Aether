@@ -1,13 +1,12 @@
 mod cli;
 mod config;
+mod db;
 mod error;
 mod fcm;
 mod listener;
 mod push;
 mod twitter;
-
 use std::path::PathBuf;
-
 use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
@@ -22,18 +21,14 @@ async fn main() {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
-
     let cli = Cli::parse();
-
     let filter = if cli.verbose {
         EnvFilter::new("debug")
     } else {
         EnvFilter::new("warn")
     };
     tracing_subscriber::fmt().with_env_filter(filter).init();
-
     let config_path = cli.config;
-
     let task = async {
         match cli.command {
             Commands::Init { auth_token, ct0 } => cmd_init(&config_path, auth_token, ct0).await,
@@ -43,7 +38,6 @@ async fn main() {
             Commands::Unregister => cmd_unregister(&config_path).await,
         }
     };
-
     let result = tokio::select! {
         result = task => result,
         _ = tokio::signal::ctrl_c() => {
@@ -51,13 +45,11 @@ async fn main() {
             return;
         }
     };
-
     if let Err(e) = result {
         eprintln!("{} {}", style("error:").red().bold(), e);
         std::process::exit(1);
     }
 }
-
 fn spinner(msg: &str) -> ProgressBar {
     let sp = ProgressBar::new_spinner();
     sp.set_style(
@@ -69,7 +61,6 @@ fn spinner(msg: &str) -> ProgressBar {
     sp.set_message(msg.to_string());
     sp
 }
-
 async fn spin<F, T>(msg: &str, done_msg: &str, fut: F) -> Result<T>
 where
     F: std::future::Future<Output = Result<T>>,
@@ -86,7 +77,6 @@ where
         }
     }
 }
-
 async fn cmd_init(
     config_path: &PathBuf,
     arg_auth_token: Option<String>,
@@ -94,7 +84,6 @@ async fn cmd_init(
 ) -> Result<()> {
     eprintln!("{}", style("Initializing configuration").bold());
     eprintln!();
-
     let auth_token = match arg_auth_token {
         Some(v) => v,
         None => Password::new()
@@ -102,7 +91,6 @@ async fn cmd_init(
             .interact()
             .map_err(|e| error::AetherError::Config(format!("input error: {}", e)))?,
     };
-
     let ct0 = match arg_ct0 {
         Some(v) => v,
         None => Input::new()
@@ -110,50 +98,40 @@ async fn cmd_init(
             .interact_text()
             .map_err(|e| error::AetherError::Config(format!("input error: {}", e)))?,
     };
-
     let config = Config {
         twitter: config::TwitterConfig { auth_token, ct0 },
         registration: None,
     };
-
     config.save(config_path)?;
     eprintln!(
         "{} Saved to {}",
         style("done").green().bold(),
         style(config_path.display()).underlined()
     );
-
     Ok(())
 }
-
 async fn cmd_register(config_path: &PathBuf) -> Result<()> {
     eprintln!("{}", style("Registering push subscription").bold());
     eprintln!();
-
     let mut config = Config::load(config_path)?;
-
     let existing_gcm = config.registration.clone().map(|r| r.gcm);
-
     let subscription = spin(
         "Registering with GCM/FCM (minting new token)...",
         "GCM/FCM registered",
         push::subscribe(existing_gcm),
     )
     .await?;
-
     spin(
         "Registering with Twitter...",
         "Twitter Push registered",
         twitter::register(&config.twitter, &subscription),
     )
     .await?;
-
     config.registration = Some(config::Registration {
         endpoint: subscription.endpoint,
         gcm: subscription.gcm,
         keys: subscription.keys,
     });
-
     config.save(config_path)?;
     eprintln!();
     eprintln!(
@@ -161,10 +139,8 @@ async fn cmd_register(config_path: &PathBuf) -> Result<()> {
         style("done").green().bold(),
         style(config_path.display()).underlined()
     );
-
     Ok(())
 }
-
 async fn cmd_listen(config_path: &PathBuf) -> Result<()> {
     let config = Config::load(config_path)?;
     let registration = config.registration.ok_or_else(|| {
@@ -172,18 +148,14 @@ async fn cmd_listen(config_path: &PathBuf) -> Result<()> {
             "No registration found. Run `register` first.".to_string(),
         )
     })?;
-
     tracing::info!(config = %config_path.display(), "config loaded, starting listener");
-
     listener::listen(registration, config_path).await?;
 
     Ok(())
 }
-
 async fn cmd_status(config_path: &PathBuf) -> Result<()> {
     eprintln!("{}", style("Status").bold());
     eprintln!();
-
     match Config::load(config_path) {
         Ok(config) => {
             eprintln!(
@@ -207,9 +179,7 @@ async fn cmd_status(config_path: &PathBuf) -> Result<()> {
                 "  ct0         {}...",
                 style(&config.twitter.ct0.chars().take(20).collect::<String>()).dim()
             );
-
             eprintln!();
-
             match config.registration {
                 Some(reg) => {
                     eprintln!(
@@ -251,22 +221,17 @@ async fn cmd_status(config_path: &PathBuf) -> Result<()> {
             );
         }
     }
-
     Ok(())
 }
-
 async fn cmd_unregister(config_path: &PathBuf) -> Result<()> {
     eprintln!("{}", style("Unregistering").bold());
     eprintln!();
-
     let mut config = Config::load(config_path)?;
     let _reg = config.registration.as_ref().ok_or_else(|| {
         error::AetherError::Config("No registration found.".to_string())
     })?;
-
     config.registration = None;
     config.save(config_path)?;
-
     eprintln!();
     eprintln!(
         "{} Registration removed from {}",
